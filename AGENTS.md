@@ -1,583 +1,189 @@
 # AGENTS.md
 
-This file provides context for AI coding assistants (Claude Code, Cursor, GitHub Copilot, Codex, etc.) working with the Mem0 repository.
+Mem0 仓库的 AI 编码助手上下文指南。
 
-## Project Overview
+## Monorepo 结构
 
-**Mem0** ("mem-zero") is an intelligent memory layer for AI agents and assistants. It provides persistent, personalized memory via both a hosted platform API and self-hosted open-source SDKs.
+多语言 monorepo — Python 和 TypeScript 包各自拥有独立的构建系统、linter 和 CI 流水线。
 
-- **Repository**: https://github.com/mem0ai/mem0
-- **Documentation**: https://docs.mem0.ai
-- **License**: Apache-2.0
+| 目录 | 包名 | 发布源 | 说明 |
+|------|------|--------|------|
+| `mem0/` | `mem0ai` | PyPI | 核心 Python SDK — memory、LLMs、embeddings、vector stores、rerankers |
+| `mem0-ts/` | `mem0ai` | npm | TypeScript SDK — `src/client/`（托管版）+ `src/oss/`（自托管版） |
+| `cli/python/` | `mem0-cli` | PyPI | Typer CLI，入口 `mem0 = "mem0_cli.app:main"`，源码在 `src/mem0_cli/` |
+| `cli/node/` | `@mem0/cli` | npm | Commander CLI |
+| `vercel-ai-sdk/` | `@mem0/vercel-ai-provider` | npm | Vercel AI SDK memory provider |
+| `openclaw/` | `@mem0/openclaw-mem0` | npm | OpenClaw 插件（Claude Code / AI 编辑器） |
+| `server/` | — | Docker | FastAPI + PostgreSQL/pgvector + Neo4j（自托管 REST 服务器） |
+| `openmemory/` | — | Docker | 自托管平台 — `api/`（FastAPI + Alembic + MCP）+ `ui/`（Next.js 15） |
+| `embedchain/` | — | PyPI（独立） | 遗留 RAG 框架 — **有自己的 Poetry 构建系统，不要混用** |
+| `docs/` | — | Mintlify | 文档站点；API 规范在 `docs/openapi.json` |
+| `evaluation/` | — | — | 基准测试框架（LOCOMO evals） |
 
-## Repository Structure
+## 环境要求
 
-This is a **polyglot monorepo** containing Python and TypeScript packages, CLIs, servers, plugins, documentation, and evaluation tooling.
+- **Python**: 3.10+（3.9 **不支持** — `pyproject.toml` 写的是 `>=3.10,<4.0`；CI 测 3.10、3.11、3.12）
+- **Node.js**: v18+（CI 测 20、22）
+- **pnpm**: v10+ — **所有** TypeScript 包统一使用（禁用 npm / yarn）
+- **Hatch**: Python 构建/环境工具（`pip install hatch`）— **不用** pip 或 conda 管理依赖
+- **Docker**: `server/` 和 `openmemory/` 开发必需
 
-### Key Directories
-
-| Directory | Description |
-|-----------|-------------|
-| `mem0/` | Core Python SDK (`mem0ai` on PyPI) — memory, LLMs, embeddings, vector stores, graphs, rerankers |
-| `mem0-ts/` | TypeScript SDK (`mem0ai` on npm) — client + OSS memory |
-| `cli/python/` | Python CLI (`mem0-cli` on PyPI) — Typer-based, entry point `mem0` |
-| `cli/node/` | Node CLI (`@mem0/cli` on npm) — Commander-based, entry point `mem0` |
-| `vercel-ai-sdk/` | `@mem0/vercel-ai-provider` — Vercel AI SDK memory provider |
-| `openclaw/` | `@mem0/openclaw-mem0` — OpenClaw plugin for Claude Code / AI editors |
-| `server/` | FastAPI REST server for self-hosted Mem0 (Docker: FastAPI + PostgreSQL/pgvector + Neo4j) |
-| `openmemory/` | Self-hosted memory platform — `api/` (FastAPI + Alembic + MCP server) and `ui/` (Next.js 15 + React 19) |
-| `mem0-plugin/` | AI editor plugins (Claude Code, Cursor, Codex) — MCP server connection, lifecycle hooks, skills |
-| `skills/` | Claude Code skill definitions — `mem0/`, `mem0-cli/`, `mem0-vercel-ai-sdk/` |
-| `docs/` | Documentation site (Mintlify) |
-| `tests/` | Python SDK tests (pytest) |
-| `evaluation/` | Benchmarking framework — LOCOMO evals, experiment runner, score generation |
-| `examples/` | Sample projects — demo apps, Chrome extension, multi-agent patterns |
-| `cookbooks/` | Jupyter notebooks — customer support chatbot, AutoGen integration |
-| `embedchain/` | Legacy Embedchain RAG framework (maintained separately, Poetry-based) |
-| `pr-reviews/` | Pull request review materials |
-| `scripts/` | Repo-wide utility scripts (e.g., `check-llms-txt-coverage.py` for docs/llms.txt sync) |
-
-### Core Package Dependencies
-
-```
-mem0 (Python SDK)          mem0-ts (TypeScript SDK)
-├── mem0/memory/           ├── src/client/        (MemoryClient — hosted)
-├── mem0/llms/             └── src/oss/           (Memory — self-hosted)
-├── mem0/embeddings/           ├── src/llms/
-├── mem0/vector_stores/        ├── src/embeddings/
-├── mem0/graphs/               ├── src/vector_stores/
-└── mem0/reranker/             └── src/graphs/
-
-cli/python/ ──▶ mem0ai (optional, for OSS mode)
-cli/node/   ──▶ mem0ai (npm, for API calls)
-vercel-ai-sdk/ ──▶ ai, @ai-sdk/* providers
-openclaw/   ──▶ mem0ai (npm)
-```
-
-## Development Setup
-
-### Requirements
-
-- **Python**: 3.9+ (3.10+ for CLI)
-- **Node.js**: v18+ (v20 or v22 recommended)
-- **pnpm**: v10+ (`npm install -g pnpm@10`) — used for all TypeScript packages
-- **Hatch**: Python build/environment tool (`pip install hatch`)
-- **Docker**: Required for `server/` and `openmemory/` development
-
-### Initial Setup
-
-```bash
-# Python SDK
-hatch shell dev_py_3_11           # creates environment with all deps
-pre-commit install                # install git hooks
-
-# TypeScript packages
-cd mem0-ts && pnpm install        # TS SDK
-cd cli/node && pnpm install       # Node CLI
-cd vercel-ai-sdk && pnpm install  # Vercel AI provider
-cd openclaw && pnpm install       # OpenClaw plugin
-```
-
-## Build, Lint, and Test Commands
+## 常用命令
 
 ### Python SDK (`mem0/`)
 
 ```bash
-# Environment setup (uses Hatch)
-hatch shell dev_py_3_11           # or dev_py_3_9, dev_py_3_10, dev_py_3_12
-
-# Linting and formatting
-make lint                          # ruff check
-make format                        # ruff format
-make sort                          # isort mem0/
-
-# Tests
-make test                          # pytest tests/
-make test-py-3.9                   # test specific Python version (3.9–3.12)
-
-# Build and publish
-make build                         # hatch build
-make publish                       # hatch publish
+hatch shell dev_py_3_11        # 激活环境（3.10、3.11、3.12 均可）
+make lint                      # ruff check
+make format                    # ruff format
+make sort                      # isort mem0/
+make test                      # pytest tests/
+make test-py-3.12              # 指定 Python 版本测试
 ```
-
-- **Python:** 3.9, 3.10, 3.11, 3.12
-- **Linter/formatter:** Ruff (line length **120**)
-- **Import sorting:** isort (`profile = "black"`)
-- **Test framework:** pytest (with pytest-mock, pytest-asyncio)
-- **Pre-commit hooks:** ruff + isort — run `pre-commit install` before committing
 
 ### TypeScript SDK (`mem0-ts/`)
 
 ```bash
-cd mem0-ts
-pnpm install
-pnpm run build                     # tsup
-pnpm run test                      # jest (all tests)
-pnpm run test:unit                 # jest --coverage (unit tests only)
-pnpm run test:integration          # jest (integration tests, needs MEM0_API_KEY)
-pnpm run test:ci                   # jest --coverage --ci (CI mode)
-pnpm run test:watch                # jest watch mode
+cd mem0-ts && pnpm install
+pnpm run build                 # tsup (CJS + ESM)
+pnpm run test                  # jest
+pnpm run test:unit             # jest --coverage（仅单元测试）
+pnpm run test:integration      # 需要 MEM0_API_KEY
 ```
-
-- **Node:** 20, 22 (CI-tested)
-- **Build:** tsup (CJS + ESM)
-- **Test:** jest
-- **Formatter:** prettier
 
 ### Python CLI (`cli/python/`)
 
 ```bash
-cd cli/python
-pip install -e ".[dev]"            # dev install with ruff + pytest
-ruff check .                       # lint
-ruff format .                      # format
-pytest                             # test
-hatch build                        # build
+cd cli/python && pip install -e ".[dev]"
+ruff check . && ruff format .  # lint + format
+pytest                         # 测试
+hatch build                    # 构建
 ```
-
-- **Python:** 3.10+ (not 3.9)
-- **Linter/formatter:** Ruff (line length **100** — different from root SDK)
-- **Ruff rules:** E, F, I, W, UP, B, SIM, RUF (ignores E501, B008 for Typer patterns, SIM108)
-- **Framework:** Typer + Rich + httpx
-- **Entry point:** `mem0 = "mem0_cli.app:main"`
-- **Source layout:** `src/mem0_cli/`
-- **Optional dependency:** `mem0ai` (for OSS mode, via `[oss]` extra)
 
 ### Node CLI (`cli/node/`)
 
 ```bash
-cd cli/node
-pnpm install
-pnpm run build                     # tsup
-pnpm run lint                      # biome check src/
-pnpm run lint:fix                  # biome check --write src/
-pnpm run typecheck                 # tsc --noEmit
-pnpm run test                      # vitest run
-pnpm run test:watch                # vitest (watch mode)
-pnpm run dev                       # tsx src/index.ts (development)
+cd cli/node && pnpm install
+pnpm run build                 # tsup (ESM)
+pnpm run lint                  # biome check src/
+pnpm run typecheck             # tsc --noEmit
+pnpm run test                  # vitest
 ```
 
-- **Node:** 18+ required
-- **Build:** tsup (ESM)
-- **Linter:** Biome (not ESLint, not Ruff)
-- **Test:** vitest (not jest)
-- **Framework:** Commander + Chalk + ora + cli-table3
-
-### Vercel AI SDK Provider (`vercel-ai-sdk/`)
+### Vercel AI SDK / OpenClaw
 
 ```bash
-cd vercel-ai-sdk
-pnpm install
-pnpm run build                     # tsup
-pnpm run lint                      # eslint
-pnpm run type-check                # tsc --noEmit
-pnpm run prettier-check            # prettier --check
-pnpm run test                      # jest
-pnpm run test:edge                 # vitest (edge runtime)
-pnpm run test:node                 # vitest (node runtime)
+cd <package> && pnpm install && pnpm run build && pnpm run test
 ```
-
-- **Build:** tsup (CJS + ESM)
-- **Lint:** ESLint + Prettier
-- **Test:** jest + vitest (edge/node configs)
-
-### OpenClaw Plugin (`openclaw/`)
-
-```bash
-cd openclaw
-pnpm install
-pnpm run build                     # tsup
-pnpm run test                      # vitest run
-```
-
-- **Build:** tsup (ESM)
-- **Test:** vitest (with Codecov in CI)
-- **Plugin manifest:** `openclaw.plugin.json`
 
 ### Server (`server/`)
 
 ```bash
-# Docker production build
-cd server
-make build                         # docker build -t mem0-api-server .
-make run_local                     # docker run -p 8000:8000 with .env
-
-# Docker Compose development (FastAPI + PostgreSQL/pgvector + Neo4j)
-cd server
-docker-compose up                  # starts all 3 services
-# mem0 API: localhost:8888
-# PostgreSQL: localhost:8432
-# Neo4j HTTP: localhost:8474, Bolt: localhost:8687
+cd server && make bootstrap    # 推荐：启动全栈 + 创建管理员 + 签发 API key
+# 或：docker compose up -d     # http://localhost:3000
 ```
 
-- **Framework:** FastAPI with uvicorn (auto-reload in dev)
-- **Services:** PostgreSQL with pgvector, Neo4j 5.x with APOC plugin
-- **Hot reload:** Dev Dockerfile mounts `server/` and `mem0/` for live changes
-
-### OpenMemory (`openmemory/`)
+### Docs (`docs/`)
 
 ```bash
-# Full stack via Docker Compose
-cd openmemory
-docker-compose up
-# Qdrant: localhost:6333
-# API (MCP): localhost:8765
-# UI: localhost:3000
-
-# Individual development
-cd openmemory/api && uvicorn main:app --reload       # FastAPI backend
-cd openmemory/ui && npm run dev                       # Next.js frontend
-
-# Tests
-cd openmemory/api && pytest tests/                   # API tests (e.g., test_mcp_server.py)
+make docs                      # mintlify dev
 ```
 
-- **API:** FastAPI + Alembic (DB migrations) + MCP server (Model Context Protocol)
-- **UI:** Next.js 15, React 19, Radix UI, Redux Toolkit, TailwindCSS, Recharts
-- **Vector store:** Qdrant
+## 关键陷阱
 
-### Documentation (`docs/`)
+### 行长度和 Linter 配置因包而异
+
+| 包 | 行长度 | Linter | Formatter | 测试框架 |
+|----|--------|--------|-----------|---------|
+| `mem0/`（根 SDK） | **120** | Ruff | Ruff | pytest |
+| `cli/python/` | **100** | Ruff（规则: E,F,I,W,UP,B,SIM,RUF） | Ruff | pytest |
+| `mem0-ts/` | — | — | Prettier | jest |
+| `cli/node/` | — | **Biome**（不是 ESLint） | Biome | **vitest**（不是 jest） |
+| `vercel-ai-sdk/` | — | ESLint | Prettier | jest + vitest |
+| `openclaw/` | — | — | — | vitest |
+
+Agent **几乎必定**猜错这些配置，lint 前务必核对。
+
+### Ruff 排除目录
+
+根 ruff 配置**排除了** `embedchain/` 和 `openmemory/`，不要对它们运行根级 ruff。
+
+### `docs/llms.txt` 同步（CI 拦截项）
+
+任何新增或修改 `docs/**/*.mdx` 的 PR **必须**同步更新 `docs/llms.txt`，否则 CI 报错（`docs-llms-txt-check.yml`）。本地修复：
 
 ```bash
-make docs                          # or: cd docs && mintlify dev
+python scripts/check-llms-txt-coverage.py --write   # 在 "## Unclassified" 下生成占位条目
+# 然后手动：替换 [TODO: ...] 标签、写 "Use when ..." 描述、移到正确分区
 ```
 
-- **Framework:** Mintlify
-- **API spec:** `docs/openapi.json`
-- **Structure:** `api-reference/`, `open-source/`, `platform/`, `integrations/`, `cookbooks/`, `core-concepts/`
+### Changelog 检查（CI 拦截项）
 
-### Evaluation (`evaluation/`)
+PR 中若 `pyproject.toml` 版本号变了，`docs/changelog/sdk.mdx` 必须同步更新，否则 CI 报错。在 Python tab 下新增 `<Update>` 条目。
 
-```bash
-cd evaluation
-make run-mem0-add                  # Run mem0 add experiments
-make run-mem0-search               # Run mem0 search experiments
-make run-mem0-plus-add             # With graph memory
-make run-mem0-plus-search          # With graph memory
-make run-rag                       # RAG baseline
-make run-full-context              # Full context baseline
-make run-langmem                   # LangMem comparison
-make run-openai                    # OpenAI comparison
-```
+### Pre-commit Hooks
 
-## Core APIs
+Hooks 自动运行 ruff（带 `--fix`）+ isort（`--profile black`）。首次设置时执行 `pre-commit install`。
 
-### Python
+### Python 依赖管理
 
-| Function / Class | Purpose | Import |
-|-----------------|---------|--------|
-| `Memory` | Self-hosted memory (sync) | `from mem0 import Memory` |
-| `AsyncMemory` | Self-hosted memory (async) | `from mem0 import AsyncMemory` |
-| `MemoryClient` | Hosted platform client (sync) | `from mem0 import MemoryClient` |
-| `AsyncMemoryClient` | Hosted platform client (async) | `from mem0 import AsyncMemoryClient` |
+**绝对不要**往根 `pyproject.toml` 的核心 `dependencies` 列表添加依赖，请使用可选依赖组（`[project.optional-dependencies]`）。
 
-**Key `Memory` / `MemoryClient` methods:**
+### `embedchain/` 完全独立
 
-| Method | Purpose |
-|--------|---------|
-| `add(messages, *, user_id, agent_id, run_id, metadata)` | Store a new memory |
-| `search(query, *, user_id, agent_id, run_id, limit, filters)` | Search memories |
-| `get(memory_id)` | Retrieve a single memory by ID |
-| `get_all(*, user_id, agent_id, run_id, limit)` | List all memories |
-| `update(memory_id, data)` | Update a memory |
-| `delete(memory_id)` | Delete a memory |
-| `delete_all(*, user_id, agent_id, run_id)` | Delete all memories |
-| `history(memory_id)` | Get change history for a memory |
+有自己的 `pyproject.toml`、`poetry.lock` 和 Makefile。不要对它使用根级 hatch 或 ruff。
 
-### TypeScript
+## 架构
 
-| Export | Purpose | Import |
-|--------|---------|--------|
-| `MemoryClient` | Hosted platform client | `import { MemoryClient } from 'mem0ai'` |
-| `Memory` | Self-hosted OSS memory | `import { Memory } from 'mem0ai/oss'` |
+### Provider 模式
 
-## Import Patterns
+所有 provider 继承各自目录下 `base.py` 的抽象基类，配置类在 `configs.py`。新增 provider 的步骤：
 
-### Python
+1. 创建 `mem0/<category>/<provider>.py`，继承 `mem0/<category>/base.py`
+2. 在 `mem0/<category>/configs.py` 添加配置
+3. 在 `mem0/<category>/__init__.py` 注册
+4. 在 `tests/<category>/` 添加测试
+5. 在 `pyproject.toml` 的对应可选组添加依赖
+6. 严格遵循同类别现有 provider 的模式
 
-| What | Import |
-|------|--------|
-| Core memory classes | `from mem0 import Memory, AsyncMemory` |
-| Platform client | `from mem0 import MemoryClient, AsyncMemoryClient` |
-| Configuration | `from mem0.configs.base import MemoryConfig` |
-| LLM providers | `from mem0.llms.<provider> import <ProviderLLM>` |
-| Embedding providers | `from mem0.embeddings.<provider> import <ProviderEmbedding>` |
-| Vector store providers | `from mem0.vector_stores.<provider> import <ProviderVectorStore>` |
+### 入口点
 
-### TypeScript
+- **Python 自托管**: `from mem0 import Memory, AsyncMemory` → `mem0/memory/main.py`
+- **Python 托管平台客户端**: `from mem0 import MemoryClient, AsyncMemoryClient` → `mem0/client/main.py`
+- **TypeScript 托管版**: `import { MemoryClient } from 'mem0ai'` → `src/client/`
+- **TypeScript OSS 版**: `import { Memory } from 'mem0ai/oss'` → `src/oss/`
 
-| What | Import |
-|------|--------|
-| Hosted client | `import { MemoryClient } from 'mem0ai'` |
-| OSS memory | `import { Memory } from 'mem0ai/oss'` |
-| Specific providers (OSS) | `import { OpenAIEmbedding } from 'mem0ai/oss'` |
+### 新记忆算法（v2.0+）
 
-## Coding Standards
-
-### File Naming Conventions
-
-- **Python source files:** `snake_case.py` (e.g., `azure_openai.py`, `cohere_reranker.py`)
-- **Python test files:** `test_<module>.py` (e.g., `test_memory.py`, `test_main.py`)
-- **TypeScript source files:** `snake_case.ts` (e.g., `azure_ai_search.ts`)
-- **TypeScript test files:** `<module>.test.ts` (e.g., `memory.test.ts`)
-- **Config/manifest files:** `kebab-case` (e.g., `openclaw.plugin.json`, `jest.config.js`)
-
-### Python Conventions
-
-- **Provider pattern:** All providers (LLMs, embeddings, vector stores, graphs, rerankers) inherit from a `base.py` abstract class in their directory. Config classes live in `configs.py`.
-- **Pydantic v2** for all data models and configuration.
-- **Ruff** is the single linting and formatting tool — no black, no flake8.
-  - Root SDK: line length **120**
-  - Python CLI: line length **100** with extended rule set (UP, B, SIM, RUF)
-- **isort** with `profile = "black"` for import sorting.
-- Ruff excludes `embedchain/` and `openmemory/` from root config.
-
-### TypeScript Conventions
-
-- **Build:** tsup across all packages.
-- **Package manager:** pnpm everywhere (no npm, no yarn).
-- **TypeScript strict mode** across all packages.
-- **Linting varies by package:**
-
-| Package | Linter | Formatter | Test Framework |
-|---------|--------|-----------|---------------|
-| `mem0-ts/` | — | Prettier | jest |
-| `cli/node/` | Biome | Biome | vitest |
-| `vercel-ai-sdk/` | ESLint | Prettier | jest + vitest |
-| `openclaw/` | — | — | vitest |
-
-### Type Checking
-
-Always run type checking after modifying TypeScript code:
-
-```bash
-cd <package> && pnpm run typecheck    # or: tsc --noEmit
-```
-
-## Architecture
-
-### Provider Pattern
-
-The SDK uses a consistent plugin architecture across 5 categories. Each category has a `base.py` abstract class and concrete provider implementations:
-
-| Category | Count | Examples |
-|----------|-------|---------|
-| **LLMs** | 24 | OpenAI, Anthropic, AWS Bedrock, Azure OpenAI, Gemini, Groq, Ollama, Together, DeepSeek, vLLM, LiteLLM, LM Studio, xAI |
-| **Vector Stores** | 30 | Qdrant, Pinecone, Chroma, Weaviate, Milvus, MongoDB, Redis, Elasticsearch, pgvector, Supabase, Faiss, S3 Vectors |
-| **Embeddings** | 15 | OpenAI, Azure OpenAI, Gemini, HuggingFace, FastEmbed, Together, AWS Bedrock, Ollama, Vertex AI |
-| **Graph Stores** | 4 | Neo4j, Memgraph, Kuzu, Apache AGE |
-| **Rerankers** | 5 | Cohere, HuggingFace, LLM-based, Sentence Transformer, Zero Entropy |
-
-### Two Usage Modes
-
-Self-hosted `Memory` / `AsyncMemory` classes and hosted-platform `MemoryClient` — both in Python and TypeScript.
-
-### Graph Memory
-
-Optional layer on top of vector memory for relationship-aware retrieval. Configured via the `graph` section of `MemoryConfig`.
-
-### MCP Integration
-
-Model Context Protocol support in multiple places:
-
-- **Remote:** MCP server at `mcp.mem0.ai`
-- **Local:** MCP server in `openmemory/api/` (FastAPI-based)
-- **Plugin:** MCP tools in `mem0-plugin/` — 9 tools: `add_memory`, `search_memories`, `get_memories`, `get_memory`, `update_memory`, `delete_memory`, `delete_all_memories`, `delete_entities`, `list_entities`
-
-### Plugin & Skills System
-
-- `mem0-plugin/` provides integrations for Claude Code, Cursor, and Codex via MCP server connections and lifecycle hooks for automatic memory capture.
-- `skills/` contains structured skill definitions for AI agents, covering SDK usage, CLI workflows, and Vercel AI SDK patterns.
-
-### Adding a New Provider
-
-To add a new LLM, embedding, vector store, or reranker provider:
-
-1. Create `mem0/<category>/<provider_name>.py`
-2. Inherit from the abstract base class in `mem0/<category>/base.py`
-3. Add configuration to `mem0/<category>/configs.py` (if the category uses one)
-4. Register the provider in `mem0/<category>/__init__.py`
-5. Add tests in `tests/<category>/<provider_name>/`
-6. Add any new dependencies to the appropriate optional group in `pyproject.toml` (never to core `dependencies`)
-7. Follow the exact pattern of existing providers in the same category — match method signatures, error handling, and config structure
+单次 ADD-only 提取 — 一次 LLM 调用，不执行 UPDATE/DELETE。记忆只增不改，实体链接 + 多信号检索（语义 + BM25 + 实体）。`add()` 是主要写入路径。
 
 ## CI/CD
 
-### CI Workflows (automated testing)
+### 发布 Tag 前缀
 
-| Workflow | File | Triggers | Tests |
-|----------|------|----------|-------|
-| Python SDK | `ci.yml` | Push to main, PRs on `mem0/`, `tests/`, `pyproject.toml` | Ruff lint + pytest on Python 3.10, 3.11, 3.12 |
-| TypeScript SDK | `ts-sdk-ci.yml` | Push to main, PRs on `mem0-ts/` | Prettier + build + jest on Node 20, 22 |
-| Python CLI | `cli-python-ci.yml` | Push to `cli/python/`, PRs, manual | Ruff lint + pytest + hatch build on Python 3.10, 3.11, 3.12 |
-| Node CLI | `cli-node-ci.yml` | Push to `cli/node/`, PRs, manual | Biome lint + tsc + vitest + tsup build on Node 20, 22 |
-| OpenClaw | `openclaw-checks.yml` | Push to `openclaw/`, PRs, manual | tsc + vitest (with Codecov) + tsup build on Node 20, 22 |
-| Embedchain | `ci.yml` (shared) | PRs on `embedchain/` | Ruff + pytest + coverage on Python 3.9–3.12 |
+| 包 | Tag 前缀 | 示例 |
+|----|----------|------|
+| Python SDK | `v*` | `v0.1.31` |
+| Python CLI | `cli-v*` | `cli-v0.2.1` |
+| TypeScript SDK | `ts-v*` | `ts-v2.4.6` |
+| Node CLI | `cli-node-v*` | `cli-node-v0.1.2` |
+| Vercel AI SDK | `vercel-ai-v*` | `vercel-ai-v2.0.6` |
+| OpenClaw | `openclaw-v*` | `openclaw-v1.0.1` |
 
-### CD Workflows (automated publishing)
+所有发布均使用 **OIDC 可信发布** — 无需 token 或密钥。新 npm 包首次发布需手动操作。
 
-| Workflow | File | Tag Prefix | Target |
-|----------|------|------------|--------|
-| Python SDK | `cd.yml` | `v*` | PyPI (`mem0ai`) |
-| TypeScript SDK | `ts-sdk-cd.yml` | `ts-v*` | npm (`mem0ai`) |
-| Python CLI | `cli-python-cd.yml` | `cli-v*` | PyPI (`mem0-cli`) |
-| Node CLI | `cli-node-cd.yml` | `cli-node-v*` | npm (`@mem0/cli`) |
-| Vercel AI SDK | `vercel-ai-cd.yml` | `vercel-ai-v*` | npm (`@mem0/vercel-ai-provider`) |
-| OpenClaw | `openclaw-cd.yml` | `openclaw-v*` | npm (`@mem0/openclaw-mem0`) |
+### CI 触发
 
-- All publishing uses **OIDC trusted publishing** — no tokens or secrets required.
-- First publish of a new npm package must be done manually; OIDC works for subsequent versions.
+每个包有自己的 CI workflow，仅在该目录变更时触发。根 CI（`ci.yml`）同时覆盖 `embedchain/` 变更。
 
-### Utility Workflows
+## 禁止事项
 
-| Workflow | File | Purpose |
-|----------|------|---------|
-| Issue Labeler | `issue-labeler.yml` | Automatic issue labeling |
-| Stale Bot | `stale.yml` | Marks stale issues and PRs |
-| llms.txt Check | `docs-llms-txt-check.yml` | Blocks PRs touching `docs/**/*.mdx` when `docs/llms.txt` is out of sync. Fix locally with `python scripts/check-llms-txt-coverage.py --write`. |
-
-## Task Completion Guidelines
-
-These guidelines outline typical artifacts for different task types. Use judgment to adapt based on scope and context.
-
-### Bug Fixes
-
-1. **Unit tests**: Add tests that would fail without the fix (regression tests)
-2. **Implementation**: Fix the bug
-3. **Manual verification**: Run the relevant test suite to confirm the fix
-4. **Lint**: Run the appropriate linter for the package you modified
-
-### New Features
-
-1. **Implementation**: Build the feature following existing patterns
-2. **Unit tests**: Comprehensive test coverage for new functionality
-3. **Documentation**: Update relevant docs in `docs/` for public APIs
-4. **Examples**: Add usage examples if the feature introduces new user-facing behavior
-5. **llms.txt**: Any new `.mdx` page under `docs/` must be linked in `docs/llms.txt` with a scope tag (`[Platform]` / `[OSS]` / `[Both]`) and a `Use when ...` description. The `docs-llms-txt-check.yml` workflow runs on every PR that touches docs and **fails the check** if the index is out of sync. To fix: run `python scripts/check-llms-txt-coverage.py --write` locally to scaffold placeholders under `## Unclassified - needs triage`, then replace the `[TODO: ...]` tags, rewrite descriptions as `Use when ...`, move entries into the right section, and delete the triage heading when empty.
-
-### New Provider (LLM / Embedding / Vector Store / Reranker)
-
-1. **Implementation**: Follow the "Adding a New Provider" steps above
-2. **Tests**: Add unit tests matching the pattern of existing providers
-3. **Configuration**: Add to the appropriate `configs.py` and `__init__.py`
-4. **Dependencies**: Add to the correct optional group in `pyproject.toml`
-5. **Documentation**: Add an integration guide in `docs/integrations/`
-
-### Refactoring / Internal Changes
-
-- Unit tests for any changed behavior
-- No documentation needed for internal-only changes
-- Ensure all existing tests still pass
-
-### When to Deviate
-
-These are guidelines, not rigid rules. Adjust based on:
-
-- **Scope**: Trivial fixes (typos, comments) may not need tests
-- **Visibility**: Internal changes may not need documentation
-- **Context**: Some changes span multiple categories — use judgment
-
-When uncertain about expected artifacts, ask for clarification.
-
-## Contributing Guidelines
-
-### Workflow
-
-1. Fork and clone the repository.
-2. Create a feature branch from `main` (e.g., `feature/my-new-feature`).
-3. Make your changes — add tests, docs, and examples as appropriate.
-4. Run linting and tests for every package you modified (see commands above).
-5. Run `pre-commit install` on first setup — hooks run ruff + isort automatically.
-6. Commit with a clear message following [Conventional Commits](https://www.conventionalcommits.org/) (e.g., `feat:`, `fix:`, `docs:`, `refactor:`).
-7. Push and open a Pull Request against `main`.
-
-### Pull Request Requirements
-
-Every PR must follow the repo's PR template (`.github/PULL_REQUEST_TEMPLATE.md`):
-
-1. **Linked Issue** — Reference the issue with `Closes #<number>`. If no issue exists, create one first or explain why in the description.
-2. **Description** — Explain what the PR does and why it's needed.
-3. **Type of Change** — Check the appropriate box:
-   - Bug fix / New feature / Breaking change / Refactor / Documentation update
-4. **Breaking Changes** — If applicable, describe what breaks and the migration path.
-5. **Test Coverage** — Check what applies:
-   - Added/updated unit tests
-   - Added/updated integration tests
-   - Tested manually (describe how)
-   - No tests needed (explain why)
-6. **Checklist** — All must be checked before merge:
-   - [ ] Code follows the project's style guidelines
-   - [ ] Self-review performed
-   - [ ] Tests added that prove the fix/feature works
-   - [ ] New and existing tests pass locally
-   - [ ] Documentation updated if needed
-
-### PR Description Template
-
-```markdown
-## Linked Issue
-
-Closes #<!-- issue number -->
-
-## Description
-
-<!-- What does this PR do? Why is it needed? -->
-
-## Type of Change
-
-- [ ] Bug fix (non-breaking change that fixes an issue)
-- [ ] New feature (non-breaking change that adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to change)
-- [ ] Refactor (no functional changes)
-- [ ] Documentation update
-
-## Breaking Changes
-
-N/A
-
-## Test Coverage
-
-- [ ] I added/updated unit tests
-- [ ] I added/updated integration tests
-- [ ] I tested manually (describe below)
-- [ ] No tests needed (explain why)
-
-## Checklist
-
-- [ ] My code follows the project's style guidelines
-- [ ] I have performed a self-review of my code
-- [ ] I have added tests that prove my fix/feature works
-- [ ] New and existing tests pass locally
-- [ ] I have updated documentation if needed
-```
-
-### General Rules
-
-- Follow existing code patterns — don't introduce new frameworks or abstractions without discussion.
-- Version bumps go in `pyproject.toml` (Python) or `package.json` (TypeScript).
-- For `server/` and `openmemory/` work, use Docker Compose for local development.
-- Do NOT use `pip` or `conda` for dependency management — use `hatch` (see `docs/contributing/development.mdx`).
-
-### Contributing Guides
-
-| Task | Guide |
-|------|-------|
-| Code contributions | `docs/contributing/development.mdx` |
-| Documentation contributions | `docs/contributing/documentation.mdx` |
-| PR template | `.github/PULL_REQUEST_TEMPLATE.md` |
-| Bug reports | `.github/ISSUE_TEMPLATE/bug_report.yml` |
-| Feature requests | `.github/ISSUE_TEMPLATE/feature_request.yml` |
-| Documentation issues | `.github/ISSUE_TEMPLATE/documentation_issue.yml` |
-
-## Do NOT
-
-- Modify CI/CD workflows without explicit approval.
-- Add new Python dependencies to the core `dependencies` list in `pyproject.toml` without discussion — use optional dependency groups instead.
-- Commit `.env` files, API keys, or credentials.
-- Modify `embedchain/` unless specifically working on that package — it has its own build system (Poetry).
-- Skip pre-commit hooks.
-- Use npm or yarn in TypeScript packages — this repo uses pnpm exclusively.
-- Use `require()` for imports in TypeScript — use ES module `import` syntax.
-- Mix up linter configs: root Python SDK uses line-length 120, Python CLI uses 100, Node CLI uses Biome (not ESLint/Ruff).
-- Modify `openmemory/` database migrations without understanding the Alembic migration chain.
-- Change public APIs without updating documentation in `docs/`.
+- 用 `pip` 或 `conda` 管理 Python 依赖 — 必须用 `hatch`
+- 用 `npm` 或 `yarn` 操作 TypeScript 包 — 必须用 `pnpm`
+- 在 TypeScript 中使用 `require()` — 必须用 ES module `import`
+- 往核心 `dependencies` 添加 Python 依赖 — 必须用可选组
+- 对 `embedchain/` 或 `openmemory/` 运行根级 ruff
+- 在不了解迁移链的情况下修改 `openmemory/` 的 Alembic 迁移
+- 未经明确批准修改 CI/CD workflow
+- 提交 `.env`、API key 或凭证文件
+- 跳过 pre-commit hooks
